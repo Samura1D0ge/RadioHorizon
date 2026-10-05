@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Калькулятор дальности УКВ-связи для моря и авиации</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js для графиков -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            navy: {
+              950: '#070b14',
+              900: '#0b1329',
+              850: '#0f1b3b',
+              800: '#142552',
+              700: '#1e387b',
+            },
+            radar: {
+              green: '#10b981',
+              cyan: '#06b6d4',
+              amber: '#f59e0b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Плавные переходы и скроллбар */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b1329;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e387b;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #2563eb;
+    }
+    .glow-cyan {
+      box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.35);
+    }
+    .glow-emerald {
+      box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.35);
+    }
+    /* Радарная сетка фона */
+    .radar-grid {
+      background-size: 30px 30px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+  </style>
+</head>
+<body class="bg-navy-950 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-black">
+
+  <!-- Верхняя панель / Header -->
+  <header class="border-b border-slate-800 bg-navy-900/80 backdrop-blur sticky top-0 z-50 px-4 lg:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <svg class="w-6 h-6 text-navy-950" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+            УКВ Радиогоризонт &middot; VHF Range Pro
+          </h1>
+          <p class="text-xs text-slate-400">Морская &amp; Авиационная радиовидимость (LOS &amp; 4/3 Earth Radius)</p>
+        </div>
+      </div>
+
+      <!-- Быстрые пресеты сценариев -->
+      <div class="flex flex-wrap items-center gap-1.5 bg-navy-950/70 p-1.5 rounded-xl border border-slate-800 text-xs font-medium">
+        <button onclick="applyPreset('ship_ship')" class="preset-btn px-2.5 py-1.5 rounded-lg transition hover:bg-navy-800 text-slate-300 hover:text-white" data-preset="ship_ship">
+          🚢 Судно — Судно
+        </button>
+        <button onclick="applyPreset('ship_coast')" class="preset-btn px-2.5 py-1.5 rounded-lg transition hover:bg-navy-800 text-cyan-300 bg-navy-800/80 shadow-sm" data-preset="ship_coast">
+          🗼 Судно — Берег
+        </button>
+        <button onclick="applyPreset('air_ground')" class="preset-btn px-2.5 py-1.5 rounded-lg transition hover:bg-navy-800 text-slate-300 hover:text-white" data-preset="air_ground">
+          ✈️ Самолёт — Земля
+        </button>
+        <button onclick="applyPreset('air_air')" class="preset-btn px-2.5 py-1.5 rounded-lg transition hover:bg-navy-800 text-slate-300 hover:text-white" data-preset="air_air">
+          🛫 Самолёт — Самолёт
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Основной контейнер -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
+
+    <!-- Верхняя панель: Основные расчетные карточки -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Дистанция км -->
+      <div class="bg-navy-900 border border-slate-800 rounded-2xl p-4 glow-cyan flex flex-col justify-between relative overflow-hidden">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-cyan-500/10 rounded-full blur-xl pointer-events-none"></div>
+        <div class="text-xs uppercase tracking-wider font-semibold text-cyan-400">Полная дальность (LOS)</div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="resTotalKm" class="text-3xl lg:text-4xl font-extrabold font-mono text-white tracking-tight">0.0</span>
+          <span class="text-sm font-semibold text-slate-400">км</span>
+        </div>
+        <div class="text-xs text-slate-400 mt-2 flex items-center justify-between border-t border-slate-800/80 pt-2">
+          <span>Горизонт h1: <b id="resD1Km" class="font-mono text-slate-200">0</b> км</span>
+          <span>Горизонт h2: <b id="resD2Km" class="font-mono text-slate-200">0</b> км</span>
+        </div>
+      </div>
+
+      <!-- Дистанция мили -->
+      <div class="bg-navy-900 border border-slate-800 rounded-2xl p-4 glow-emerald flex flex-col justify-between relative overflow-hidden">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl pointer-events-none"></div>
+        <div class="text-xs uppercase tracking-wider font-semibold text-emerald-400">Морские мили</div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="resTotalNm" class="text-3xl lg:text-4xl font-extrabold font-mono text-emerald-300 tracking-tight">0.0</span>
+          <span class="text-sm font-semibold text-slate-400">NM (миль)</span>
+        </div>
+        <div class="text-xs text-slate-400 mt-2 flex items-center justify-between border-t border-slate-800/80 pt-2">
+          <span>1 NM = 1.852 км</span>
+          <span id="opticalDiffBadge" class="text-emerald-400 font-mono text-[11px]">+15% за счет рефракции</span>
+        </div>
+      </div>
+
+      <!-- Оптический горизонт (k=1) -->
+      <div class="bg-navy-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+        <div class="text-xs uppercase tracking-wider font-semibold text-amber-400">Оптический горизонт (k=1)</div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="resOpticalKm" class="text-2xl lg:text-3xl font-bold font-mono text-slate-200">0.0</span>
+          <span class="text-xs font-semibold text-slate-400">км</span>
+          <span class="text-slate-500 font-mono text-sm">(<span id="resOpticalNm">0.0</span> NM)</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2 border-t border-slate-800/80 pt-2 leading-relaxed">
+          Геометрическая прямая без искривления лучей в атмосфере
+        </p>
+      </div>
+
+      <!-- Расчет затухания свободного пространства FSPL -->
+      <div class="bg-navy-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs uppercase tracking-wider font-semibold text-purple-400">Затухание (FSPL)</span>
+          <span id="badgeFreqDisplay" class="px-2 py-0.5 text-[10px] font-mono bg-purple-950/80 border border-purple-800/50 text-purple-300 rounded-full">156 МГц</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="resFspl" class="text-2xl lg:text-3xl font-bold font-mono text-purple-200 tracking-tight">0.0</span>
+          <span class="text-xs font-semibold text-slate-400">dB</span>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2 border-t border-slate-800/80 pt-2 flex justify-between">
+          <span>Свободное пространство</span>
+          <span id="linkMarginStatus" class="text-emerald-400 font-medium">Норма для УКВ</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Основной рабочий блок: Настройки слева, Интерактивный холст справа -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- Колонка управления параметрами (4 колонки) -->
+      <div class="lg:col-span-4 bg-navy-900 border border-slate-800 rounded-2xl p-5 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h2 class="font-bold text-sm tracking-wide text-white uppercase flex items-center gap-2">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+            Параметры линии связи
+          </h2>
+          <button onclick="resetToDefaults()" title="Сбросить к исходным" class="text-xs text-slate-400 hover:text-white transition">Сброс</button>
+        </div>
+
+        <!-- Объект 1 (Передатчик / Судно 1 / Станция) -->
+        <div class="space-y-2 bg-navy-950/60 p-3.5 rounded-xl border border-slate-800/80">
+          <div class="flex items-center justify-between">
+            <label id="labelH1" for="inputH1" class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span>
+              Объект 1: Мачта судна
+            </label>
+            <div class="flex items-center gap-1">
+              <input type="number" id="numH1" min="0.5" max="15000" step="0.5" value="10" 
+                     class="w-20 px-2 py-1 bg-navy-900 border border-slate-700 rounded-lg text-right font-mono text-sm text-cyan-300 focus:outline-none focus:border-cyan-500">
+              <span class="text-xs text-slate-400">м</span>
+            </div>
+          </div>
+          <input type="range" id="inputH1" min="1" max="10000" value="10" step="1"
+                 class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+          <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+            <span>1 м (Лодка)</span>
+            <span>50 м (Вышка)</span>
+            <span>10 000 м (Эшелон)</span>
+          </div>
+        </div>
+
+        <!-- Объект 2 (Приемник / Судно 2 / Береговая станция / Самолет) -->
+        <div class="space-y-2 bg-navy-950/60 p-3.5 rounded-xl border border-slate-800/80">
+          <div class="flex items-center justify-between">
+            <label id="labelH2" for="inputH2" class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>
+              Объект 2: Береговая станция
+            </label>
+            <div class="flex items-center gap-1">
+              <input type="number" id="numH2" min="0.5" max="15000" step="0.5" value="50" 
+                     class="w-20 px-2 py-1 bg-navy-900 border border-slate-700 rounded-lg text-right font-mono text-sm text-emerald-300 focus:outline-none focus:border-emerald-500">
+              <span class="text-xs text-slate-400">м</span>
+            </div>
+          </div>
+          <input type="range" id="inputH2" min="1" max="10000" value="50" step="1"
+                 class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400">
+          <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+            <span>1 м</span>
+            <span>50 м</span>
+            <span>10 000 м</span>
+          </div>
+        </div>
+
+        <!-- Атмосферная рефракция (фактор k) -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label for="selectK" class="text-xs font-semibold text-slate-300">Фактор рефракции (k-индекс):</label>
+            <span id="displayKVal" class="text-xs font-mono text-amber-400 font-bold">k = 1.333 (4/3)</span>
+          </div>
+          <select id="selectK" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500">
+            <option value="1.33333" selected>Стандартная рефракция: k = 4/3 (d ≈ 4.12 &times; √h)</option>
+            <option value="1.0">Без рефракции (оптический): k = 1.0 (d ≈ 3.57 &times; √h)</option>
+            <option value="1.15">Слабая рефракция / Сухой холодный воздух (k = 1.15)</option>
+            <option value="1.6">Сверхрефракция / Над тёплым морем (k = 1.60)</option>
+          </select>
+          <p class="text-[11px] text-slate-400 leading-tight">
+            В нормальной тропосфере градиент диэлектрической проницаемости искривляет радиолучи к Земле, эффективно увеличивая её радиус на 33%.
+          </p>
+        </div>
+
+        <!-- Частота радиоканала & Быстрый выбор диапазона -->
+        <div class="space-y-2 border-t border-slate-800/80 pt-3">
+          <div class="flex items-center justify-between">
+            <label for="inputFreq" class="text-xs font-semibold text-slate-300">Частота канала (МГц):</label>
+            <div class="flex items-center gap-1">
+              <input type="number" id="inputFreq" min="1" max="3000" value="156.8" 
+                     class="w-24 px-2 py-1 bg-navy-950 border border-slate-700 rounded-lg text-right font-mono text-sm text-purple-300 focus:outline-none focus:border-purple-500">
+              <span class="text-xs text-slate-400">МГц</span>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-1.5">
+            <button onclick="setFrequency(156.8, '16 VHF')" class="text-left px-2 py-1.5 rounded-lg bg-navy-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 transition">
+              🚢 156.8 МГц (Ch 16 Морской)
+            </button>
+            <button onclick="setFrequency(121.5, '121.5 Авиа')" class="text-left px-2 py-1.5 rounded-lg bg-navy-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 transition">
+              ✈️ 121.5 МГц (Аварийный авиа)
+            </button>
+            <button onclick="setFrequency(156.525, 'Ch 70 ЦИВ')" class="text-left px-2 py-1.5 rounded-lg bg-navy-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 transition">
+              📡 156.525 МГц (ЦИВ / DSC)
+            </button>
+            <button onclick="setFrequency(127.0, '127 ATC')" class="text-left px-2 py-1.5 rounded-lg bg-navy-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 transition">
+              🛩️ 127.0 МГц (Диспетчер УВД)
+            </button>
+          </div>
+        </div>
+
+        <!-- Блок «Показать преподавателю» -->
+        <div class="bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/30 p-3.5 rounded-xl">
+          <div class="flex items-center gap-2 text-amber-300 text-xs font-bold mb-1.5">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Главный физический вывод для доклада:
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Дальность УКВ ограничена <strong class="text-amber-200">кривизной геоида</strong>, а не мощностью передатчика. Увеличение мощности в 2 раза даёт прирост дальности всего &lt;10%, в то время как подъём антенны с <strong class="text-white">10 м до 40 м</strong> удваивает её горизонт (<span class="font-mono text-amber-300">√40 ≈ 2 &times; √10</span>).
+          </p>
+        </div>
+
+      </div>
+
+      <!-- Холст интерактивной физической модели (8 колонок) -->
+      <div class="lg:col-span-8 space-y-4">
+        <div class="bg-navy-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+          <div class="px-5 py-3 border-b border-slate-800 bg-navy-950/60 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span class="text-xs font-semibold uppercase tracking-wider text-slate-200">Интерактивная геометрия: Касательная радиогоризонта</span>
+            </div>
+            <!-- Индикаторы слоев -->
+            <div class="flex items-center gap-3 text-xs">
+              <label class="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                <input type="checkbox" id="chkShowOptical" checked class="rounded bg-navy-900 border-slate-700 text-amber-500 focus:ring-0">
+                <span class="text-amber-400 text-[11px]">Опт. луч (k=1)</span>
+              </label>
+              <label class="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                <input type="checkbox" id="chkAnimateWaves" checked class="rounded bg-navy-900 border-slate-700 text-cyan-500 focus:ring-0">
+                <span class="text-cyan-400 text-[11px]">Анимация волн</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Контейнер Canvas с адаптивной высотой -->
+          <div class="relative w-full h-[360px] md:h-[420px] bg-navy-950 radar-grid">
+            <canvas id="horizonCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+            
+            <!-- Легенда на холсте (перенесена в верхний левый угол) -->
+            <div class="absolute top-4 left-4 bg-navy-900/90 backdrop-blur border border-slate-800 rounded-xl px-3 py-2 text-[11px] space-y-1 pointer-events-none shadow-lg">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-0.5 bg-cyan-400 inline-block"></span>
+                <span class="text-slate-200">Радиолуч с рефракцией (k=<span id="legendKVal">4/3</span>)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-0.5 border-t border-dashed border-amber-400 inline-block"></span>
+                <span class="text-amber-300">Оптическая касательная (k=1.0)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-1.5 bg-blue-600/60 rounded inline-block"></span>
+                <span class="text-slate-300">Поверхность гидросферы / Земли</span>
+              </div>
+            </div>
+
+            <!-- Всплывающая подсказка при наведении -->
+            <div id="canvasTooltip" class="absolute hidden bg-navy-900/95 border border-cyan-500/50 text-slate-200 text-xs px-3 py-1.5 rounded-lg shadow-xl pointer-events-none transform -translate-x-1/2 -translate-y-full mb-2">
+            </div>
+          </div>
+        </div>
+
+        <!-- Нижний блок визуализации: График зависимости и Сравнительная таблица -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- График Chart.js -->
+          <div class="bg-navy-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Зависимость дальности от высоты h1</h3>
+              <span class="text-[10px] font-mono text-cyan-400">d = 4.12 &times; (√h1 + √h2)</span>
+            </div>
+            <div class="relative w-full h-52">
+              <canvas id="rangeChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Сравнительная таблица эталонных высот -->
+          <div class="bg-navy-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Сравнение типовых высот антенн</h3>
+              <span class="text-[10px] text-slate-400">При h2 = <span id="tblH2Val" class="font-mono text-white">50</span> м</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-left">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400 font-semibold">
+                    <th class="py-1.5 px-2">Тип антенны</th>
+                    <th class="py-1.5 px-2">h1, м</th>
+                    <th class="py-1.5 px-2 text-right">Радиогоризонт</th>
+                    <th class="py-1.5 px-2 text-right">В милях (NM)</th>
+                  </tr>
+                </thead>
+                <tbody id="comparisonTableBody" class="divide-y divide-slate-800/60 font-mono text-slate-300 text-[11px]">
+                  <!-- Заполняется динамически JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Справочно-теоретический раздел: GMDSS, VHF Морской и Авиация -->
+    <section class="bg-navy-900 border border-slate-800 rounded-2xl p-6 space-y-5 mt-6">
+      <div class="border-b border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+            Теоретический справочник для доклада и защиты
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Физика радиораспространения УКВ/VHF и регламенты морской/авиационной службы</p>
+        </div>
+        <span class="text-xs font-mono px-3 py-1 bg-navy-950 border border-cyan-500/30 text-cyan-400 rounded-full">
+          ITU-R P.528 / SOLAS GMDSS A1
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-300 leading-relaxed">
+        <!-- Колонка 1: Формулы и вывод -->
+        <div class="space-y-3 bg-navy-950/60 p-4 rounded-xl border border-slate-800">
+          <div class="font-bold text-sm text-cyan-300 flex items-center gap-1.5">
+            <span>📐 Математический вывод</span>
+          </div>
+          <p>
+            Расстояние от точки на высоте $h$ до точки касания со сферической поверхностью радиуса $R$:
+          </p>
+          <div class="p-2.5 bg-navy-900 rounded-lg font-mono text-[11px] text-cyan-300 border border-slate-800">
+            d = √(2 &times; R_eff &times; h + h²) ≈ √(2 &times; R_eff &times; h)
+          </div>
+          <p>
+            При $R = 6371$ км и стандартной рефракции $k = 4/3$ ($R_{eff} ≈ 8495$ км):
+          </p>
+          <div class="p-2 bg-navy-900 rounded-lg font-mono text-[11px] text-emerald-300 border border-slate-800">
+            d_km ≈ 4.12 &times; (√h1 + √h2)
+          </div>
+          <p class="text-slate-400 text-[11px]">
+            Для чисто оптической видимости без атмосферного преломления ($k = 1$): коэффициент равен <b class="text-slate-200">3.57</b>.
+          </p>
+        </div>
+
+        <!-- Колонка 2: Морская связь GMDSS -->
+        <div class="space-y-3 bg-navy-950/60 p-4 rounded-xl border border-slate-800">
+          <div class="font-bold text-sm text-emerald-300 flex items-center gap-1.5">
+            <span>🚢 Морская УКВ &amp; ГМССБ (GMDSS)</span>
+          </div>
+          <ul class="space-y-2">
+            <li>
+              <strong class="text-white">Канал 16 (156.800 МГц):</strong> Международный канал бедствия, безопасности и вызова. Мощность передатчика: 25 Вт (стационарный) / 1–5 Вт (портативный).
+            </li>
+            <li>
+              <strong class="text-white">Канал 70 (156.525 МГц):</strong> Цифровой избирательный вызов (ЦИВ / DSC) без речевого трафика.
+            </li>
+            <li>
+              <strong class="text-white">Морской район А1:</strong> Зона действия береговых станций УКВ с непрерывным наблюдением в режиме ЦИВ (обычно принимается равной 20–30 морским милям).
+            </li>
+            <li>
+              <strong class="text-white">AIS (АИС):</strong> 161.975 МГц и 162.025 МГц для автоматической идентификации судов.
+            </li>
+          </ul>
+        </div>
+
+        <!-- Колонка 3: Авиационная УКВ & FSPL -->
+        <div class="space-y-3 bg-navy-950/60 p-4 rounded-xl border border-slate-800">
+          <div class="font-bold text-sm text-purple-300 flex items-center gap-1.5">
+            <span>✈️ Авиационная связь &amp; Затухание</span>
+          </div>
+          <ul class="space-y-2">
+            <li>
+              <strong class="text-white">Диапазон 118.000–136.975 МГц:</strong> Амплитудная модуляция (АМ), шаг 8.33 / 25 кГц для связи борт-земля и борт-борт.
+            </li>
+            <li>
+              <strong class="text-white">121.500 МГц:</strong> Международная авиационная аварийная частота (Guard frequency / аварийные радиомаяки ELT).
+            </li>
+            <li>
+              <strong class="text-white">FSPL (Потери в эфире):</strong>
+              <div class="p-1.5 mt-1 bg-navy-900 rounded font-mono text-[10px] text-purple-300 border border-slate-800">
+                FSPL(dB) = 20·lg(d_km) + 20·lg(f_MHz) + 32.44
+              </div>
+              Показывает энергетический запас, необходимый приёмнику для преодоления геометрического рассеяния фронта волны.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Подвал -->
+  <footer class="border-t border-slate-800 bg-navy-950 py-4 px-6 text-center text-xs text-slate-500">
+    <p>Калькулятор дальности УКВ-связи &bull; Разработано для демонстрации на лекциях и курсовых защитах &bull; ГОСТ &amp; ITU-R P.528</p>
+  </footer>
+
+  <!-- JavaScript: Математика, рендеринг холста и графиков -->
+  <script>
+    // Физические константы
+    const R_EARTH_KM = 6371.0; // Средний радиус Земли в километрах
+    const NM_TO_KM = 1.852;    // Километров в 1 морской миле
+
+    // Ссылки на элементы UI
+    const inputH1 = document.getElementById('inputH1');
+    const numH1 = document.getElementById('numH1');
+    const inputH2 = document.getElementById('inputH2');
+    const numH2 = document.getElementById('numH2');
+    const selectK = document.getElementById('selectK');
+    const displayKVal = document.getElementById('displayKVal');
+    const legendKVal = document.getElementById('legendKVal');
+    const inputFreq = document.getElementById('inputFreq');
+    const badgeFreqDisplay = document.getElementById('badgeFreqDisplay');
+
+    const labelH1 = document.getElementById('labelH1');
+    const labelH2 = document.getElementById('labelH2');
+
+    const resTotalKm = document.getElementById('resTotalKm');
+    const resTotalNm = document.getElementById('resTotalNm');
+    const resD1Km = document.getElementById('resD1Km');
+    const resD2Km = document.getElementById('resD2Km');
+    const resOpticalKm = document.getElementById('resOpticalKm');
+    const resOpticalNm = document.getElementById('resOpticalNm');
+    const opticalDiffBadge = document.getElementById('opticalDiffBadge');
+    const resFspl = document.getElementById('resFspl');
+    const linkMarginStatus = document.getElementById('linkMarginStatus');
+
+    const chkShowOptical = document.getElementById('chkShowOptical');
+    const chkAnimateWaves = document.getElementById('chkAnimateWaves');
+
+    const canvas = document.getElementById('horizonCanvas');
+    const ctx = canvas.getContext('2d');
+    const canvasTooltip = document.getElementById('canvasTooltip');
+
+    let wavePhase = 0;
+    let animationFrameId = null;
+    let chartInstance = null;
+
+    // Пресеты сценариев связи
+    const PRESETS = {
+      ship_ship: {
+        name: 'Судно — Судно',
+        h1: 15,
+        h2: 15,
+        label1: 'Объект 1: Мачта судна А',
+        label2: 'Объект 2: Мачта судна Б',
+        freq: 156.8,
+        k: 1.33333
+      },
+      ship_coast: {
+        name: 'Судно — Берег',
+        h1: 10,
+        h2: 60,
+        label1: 'Объект 1: Антенна судна',
+        label2: 'Объект 2: Береговая РЛС/БРС',
+        freq: 156.8,
+        k: 1.33333
+      },
+      air_ground: {
+        name: 'Самолёт — Земля',
+        h1: 3000,
+        h2: 30,
+        label1: 'Объект 1: Борт самолёта (h1)',
+        label2: 'Объект 2: Вышка КДП / АТС',
+        freq: 121.5,
+        k: 1.33333
+      },
+      air_air: {
+        name: 'Самолёт — Самолёт',
+        h1: 9000,
+        h2: 10000,
+        label1: 'Объект 1: Самолёт FL300',
+        label2: 'Объект 2: Самолёт FL330',
+        freq: 127.0,
+        k: 1.33333
+      }
+    };
+
+    /**
+     * Расчет дальности видимости одного объекта до горизонта
+     * @param {number} h Высота в метрах
+     * @param {number} k Коэффициент рефракции
+     * @returns {number} Дистанция в км
+     */
+    function calculateSingleHorizonKm(h, k) {
+      if (h <= 0) return 0;
+      const R_eff = R_EARTH_KM * k;
+      // Точная геометрия: d = sqrt(2 * R_eff * (h/1000) + (h/1000)^2)
+      const h_km = h / 1000.0;
+      return Math.sqrt(2 * R_eff * h_km + h_km * h_km);
+    }
+
+    /**
+     * Расчет полной дальности прямой радиовидимости между двумя антеннами
+     */
+    function calculateFullHorizon(h1, h2, k) {
+      const d1 = calculateSingleHorizonKm(h1, k);
+      const d2 = calculateSingleHorizonKm(h2, k);
+      return {
+        d1,
+        d2,
+        totalKm: d1 + d2,
+        totalNm: (d1 + d2) / NM_TO_KM
+      };
+    }
+
+    /**
+     * Потери в свободном пространстве (FSPL - Free Space Path Loss)
+     * FSPL(dB) = 20*log10(d_km) + 20*log10(f_MHz) + 32.44
+     */
+    function calculateFSPL(distanceKm, freqMHz) {
+      if (distanceKm <= 0.01 || freqMHz <= 0) return 0;
+      return 20 * Math.log10(distanceKm) + 20 * Math.log10(freqMHz) + 32.44;
+    }
+
+    function updateAll() {
+      const h1 = parseFloat(inputH1.value) || 0;
+      const h2 = parseFloat(inputH2.value) || 0;
+      const k = parseFloat(selectK.value) || 1.33333;
+      const freq = parseFloat(inputFreq.value) || 156.8;
+
+      // Радиовидимость (с учетом текущего k)
+      const radio = calculateFullHorizon(h1, h2, k);
+      // Оптический горизонт (k = 1.0)
+      const optical = calculateFullHorizon(h1, h2, 1.0);
+
+      // Обновление карточек вывода
+      resTotalKm.textContent = radio.totalKm.toFixed(1);
+      resTotalNm.textContent = radio.totalNm.toFixed(1);
+      resD1Km.textContent = radio.d1.toFixed(1);
+      resD2Km.textContent = radio.d2.toFixed(1);
+
+      resOpticalKm.textContent = optical.totalKm.toFixed(1);
+      resOpticalNm.textContent = optical.totalNm.toFixed(1);
+
+      // Процент прироста от рефракции
+      if (optical.totalKm > 0) {
+        const gainPercent = ((radio.totalKm - optical.totalKm) / optical.totalKm) * 100;
+        if (gainPercent > 0.1) {
+          opticalDiffBadge.textContent = `+${gainPercent.toFixed(1)}% за счет рефракции`;
+          opticalDiffBadge.className = 'text-emerald-400 font-mono text-[11px]';
+        } else if (gainPercent < -0.1) {
+          opticalDiffBadge.textContent = `${gainPercent.toFixed(1)}% (субрефракция)`;
+          opticalDiffBadge.className = 'text-amber-400 font-mono text-[11px]';
+        } else {
+          opticalDiffBadge.textContent = `Идентично геометрическому`;
+          opticalDiffBadge.className = 'text-slate-400 font-mono text-[11px]';
+        }
+      }
+
+      // Текстовая индикация k
+      displayKVal.textContent = `k = ${k.toFixed(3)}`;
+      legendKVal.textContent = k === 1.33333 ? '4/3' : k.toFixed(2);
+
+      // Расчет FSPL
+      badgeFreqDisplay.textContent = `${freq.toFixed(1)} МГц`;
+      const fspl = calculateFSPL(radio.totalKm, freq);
+      resFspl.textContent = fspl.toFixed(1);
+
+      if (fspl < 110) {
+        linkMarginStatus.textContent = 'Отличный уровень сигнала';
+        linkMarginStatus.className = 'text-emerald-400 font-medium';
+      } else if (fspl < 135) {
+        linkMarginStatus.textContent = 'Норма для УКВ (до 25 Вт)';
+        linkMarginStatus.className = 'text-cyan-400 font-medium';
+      } else {
+        linkMarginStatus.textContent = 'Критический сигнал / Требуется высокая ЧУ';
+        linkMarginStatus.className = 'text-amber-400 font-medium';
+      }
+
+      // Обновление таблицы и графика
+      updateComparisonTable(h2, k);
+      updateChart(h2, k);
+    }
+
+    function updateComparisonTable(currentH2, k) {
+      document.getElementById('tblH2Val').textContent = currentH2;
+      const benchmarkHeights = [
+        { name: 'Портативная рация (уровень плеча)', h: 1.5 },
+        { name: 'Катер / Моторная яхта', h: 4 },
+        { name: 'Мачта рыболовного траулера', h: 12 },
+        { name: 'Контейнеровоз / Танкер', h: 25 },
+        { name: 'Береговая вышка / Маяк', h: 60 },
+        { name: 'Мачта на возвышенности', h: 150 },
+        { name: 'Вертолёт ПСС / Поисковый', h: 500 },
+        { name: 'Самолёт местных линий', h: 3000 },
+        { name: 'Магистральный лайнер', h: 10000 },
+      ];
+
+      const tbody = document.getElementById('comparisonTableBody');
+      tbody.innerHTML = '';
+
+      benchmarkHeights.forEach(item => {
+        const full = calculateFullHorizon(item.h, currentH2, k);
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-navy-800/40 transition cursor-pointer';
+        tr.onclick = () => {
+          inputH1.value = item.h;
+          numH1.value = item.h;
+          updateAll();
+        };
+
+        tr.innerHTML = `
+          <td class="py-1.5 px-2 text-slate-300 font-sans flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full ${item.h > 1000 ? 'bg-purple-400' : 'bg-cyan-400'}"></span>
+            ${item.name}
+          </td>
+          <td class="py-1.5 px-2 text-cyan-300">${item.h} м</td>
+          <td class="py-1.5 px-2 text-right font-bold text-white">${full.totalKm.toFixed(1)} км</td>
+          <td class="py-1.5 px-2 text-right text-emerald-400">${full.totalNm.toFixed(1)} NM</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function initChart() {
+      const ctxChart = document.getElementById('rangeChart').getContext('2d');
+      chartInstance = new Chart(ctxChart, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Радиогоризонт (k=4/3)',
+              data: [],
+              borderColor: '#06b6d4',
+              backgroundColor: 'rgba(6, 182, 212, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.3,
+              pointRadius: 0
+            },
+            {
+              label: 'Оптический (k=1.0)',
+              data: [],
+              borderColor: '#f59e0b',
+              borderDash: [4, 4],
+              borderWidth: 1.5,
+              fill: false,
+              pointRadius: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: {
+                color: '#94a3b8',
+                font: { size: 10, family: 'Inter' }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                title: (items) => `Высота h1: ${items[0].label} м`,
+                label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)} км (${(ctx.raw / NM_TO_KM).toFixed(1)} NM)`
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: { display: true, text: 'Высота h1 (м)', color: '#64748b', font: { size: 10 } },
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: '#94a3b8', font: { size: 9 }, maxTicksLimit: 10 }
+            },
+            y: {
+              title: { display: true, text: 'Дальность d (км)', color: '#64748b', font: { size: 10 } },
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: '#94a3b8', font: { size: 9 } }
+            }
+          }
+        }
+      });
+    }
+
+    function updateChart(h2, k) {
+      if (!chartInstance) return;
+
+      const currentH1 = parseFloat(inputH1.value) || 10;
+      const maxH = Math.max(currentH1 * 2, 100);
+      const step = Math.max(1, Math.round(maxH / 30));
+
+      const labels = [];
+      const radioData = [];
+      const opticalData = [];
+
+      for (let h = 1; h <= maxH; h += step) {
+        labels.push(h);
+        radioData.push(calculateFullHorizon(h, h2, k).totalKm);
+        opticalData.push(calculateFullHorizon(h, h2, 1.0).totalKm);
+      }
+
+      chartInstance.data.labels = labels;
+      chartInstance.data.datasets[0].data = radioData;
+      chartInstance.data.datasets[0].label = `Радиовидимость (k=${k.toFixed(2)})`;
+      chartInstance.data.datasets[1].data = opticalData;
+      chartInstance.update('none');
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+    }
+
+    function drawCanvasScene() {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (!width || !height) return;
+
+      ctx.clearRect(0, 0, width, height);
+
+      const h1 = parseFloat(inputH1.value) || 10;
+      const h2 = parseFloat(inputH2.value) || 50;
+      const k = parseFloat(selectK.value) || 1.33333;
+      const showOptical = chkShowOptical.checked;
+      const animateWaves = chkAnimateWaves.checked;
+
+      // Центр кривизны Земли для наглядной дуги
+      // Дуга океана/земли
+      const earthRadiusArc = width * 1.5;
+      const earthCenterX = width / 2;
+      const earthCenterY = height + earthRadiusArc - 85;
+
+      // 1. Отрисовка геоида (Земли / Океана)
+      ctx.beginPath();
+      ctx.arc(earthCenterX, earthCenterY, earthRadiusArc, 0, 2 * Math.PI);
+      const oceanGradient = ctx.createLinearGradient(0, height - 90, 0, height);
+      oceanGradient.addColorStop(0, '#1e3a8a');
+      oceanGradient.addColorStop(0.4, '#0f172a');
+      oceanGradient.addColorStop(1, '#020617');
+      ctx.fillStyle = oceanGradient;
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.stroke();
+
+      // Сетка долготы/кривизны на поверхности
+      ctx.save();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
+      ctx.lineWidth = 1;
+      for (let angleDeg = -30; angleDeg <= 30; angleDeg += 5) {
+        const rad = (angleDeg - 90) * (Math.PI / 180);
+        const gx = earthCenterX + earthRadiusArc * Math.cos(rad);
+        const gy = earthCenterY + earthRadiusArc * Math.sin(rad);
+        ctx.beginPath();
+        ctx.moveTo(gx, gy);
+        ctx.lineTo(earthCenterX, earthCenterY);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // 2. Расположение объектов 1 и 2 на дуге
+      // Угловое позиционирование для наглядности
+      const angle1 = -24 * (Math.PI / 180);
+      const angle2 = 24 * (Math.PI / 180);
+
+      // Масштабирование высоты для наглядности (логарифмическая шкала, чтобы 10м и 10000м гармонично выглядели)
+      function getVisualHeight(realH) {
+        if (realH <= 0) return 8;
+        return 12 + Math.log10(realH + 1) * 22;
+      }
+
+      const vh1 = getVisualHeight(h1);
+      const vh2 = getVisualHeight(h2);
+
+      // Поверхностные точки
+      const base1X = earthCenterX + earthRadiusArc * Math.sin(angle1);
+      const base1Y = earthCenterY - earthRadiusArc * Math.cos(angle1);
+      const base2X = earthCenterX + earthRadiusArc * Math.sin(angle2);
+      const base2Y = earthCenterY - earthRadiusArc * Math.cos(angle2);
+
+      // Вершины антенн
+      const tip1X = earthCenterX + (earthRadiusArc + vh1) * Math.sin(angle1);
+      const tip1Y = earthCenterY - (earthRadiusArc + vh1) * Math.cos(angle1);
+      const tip2X = earthCenterX + (earthRadiusArc + vh2) * Math.sin(angle2);
+      const tip2Y = earthCenterY - (earthRadiusArc + vh2) * Math.cos(angle2);
+
+      // Точка касания горизонта на поверхности Земли
+      // Положение точки касания зависит от отношения d1 и d2
+      const calcData = calculateFullHorizon(h1, h2, k);
+      const ratio = calcData.d1 / (calcData.d1 + calcData.d2 || 1);
+      const tangentAngle = angle1 + (angle2 - angle1) * ratio;
+
+      const tangBaseX = earthCenterX + earthRadiusArc * Math.sin(tangentAngle);
+      const tangBaseY = earthCenterY - earthRadiusArc * Math.cos(tangentAngle);
+
+      // 3. Линия радиолуча с рефракцией (изогнута либо прямая к эффективному горизонту)
+      ctx.save();
+      // Анимированная пульсация волны вдоль луча
+      ctx.beginPath();
+      ctx.moveTo(tip1X, tip1Y);
+      // Квадратичная кривая Безье для моделирования кривизны рефракции
+      // Контрольная точка слегка смещена
+      const ctrlY = (tip1Y + tip2Y) / 2 + (k > 1 ? 14 * (k - 1) : 0);
+      ctx.quadraticCurveTo(tangBaseX, ctrlY, tip2X, tip2Y);
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#06b6d4';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.restore();
+
+      // Отрисовка бегущих радиоволн вдоль линии прямой видимости
+      if (animateWaves) {
+        wavePhase = (wavePhase + 0.02) % 1;
+        ctx.save();
+        for (let i = 0; i < 5; i++) {
+          const t = (wavePhase + i * 0.2) % 1;
+          const wx = (1 - t) * (1 - t) * tip1X + 2 * (1 - t) * t * tangBaseX + t * t * tip2X;
+          const wy = (1 - t) * (1 - t) * tip1Y + 2 * (1 - t) * t * ctrlY + t * t * tip2Y;
+          ctx.beginPath();
+          ctx.arc(wx, wy, 3, 0, 2 * Math.PI);
+          ctx.fillStyle = `rgba(34, 211, 238, ${1 - Math.abs(t - 0.5) * 2})`;
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // 4. Оптический луч без рефракции (k=1)
+      if (showOptical && k !== 1.0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([5, 5]);
+        ctx.moveTo(tip1X, tip1Y);
+        ctx.lineTo(tip2X, tip2Y);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 5. Отрисовка антенн и объектов
+      drawObjectIcon(base1X, base1Y, tip1X, tip1Y, h1, '#06b6d4', 'Объект 1');
+      drawObjectIcon(base2X, base2Y, tip2X, tip2Y, h2, '#10b981', 'Объект 2');
+
+      // 6. Отрисовка точки горизонта (Касание поверхности)
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(tangBaseX, tangBaseY, 4.5, 0, 2 * Math.PI);
+      ctx.fillStyle = '#f43f5e';
+      ctx.shadowColor = '#f43f5e';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '10px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillText('Радиогоризонт', tangBaseX, tangBaseY + 16);
+      ctx.restore();
+
+      // Индикаторы расстояний d1 и d2
+      ctx.save();
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px JetBrains Mono';
+      ctx.fillText(`d1 ≈ ${calcData.d1.toFixed(1)} км`, (tip1X + tangBaseX) / 2 - 15, (tip1Y + tangBaseY) / 2 - 12);
+      ctx.fillText(`d2 ≈ ${calcData.d2.toFixed(1)} км`, (tip2X + tangBaseX) / 2 + 15, (tip2Y + tangBaseY) / 2 - 12);
+      ctx.restore();
+    }
+
+    /**
+     * Отрисовка символического изображения объекта (вышка, судно, самолет)
+     */
+    function drawObjectIcon(bx, by, tx, ty, heightMeters, color, title) {
+      ctx.save();
+      // Линия мачты / высота над землей
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(tx, ty);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Основание
+      ctx.beginPath();
+      ctx.arc(bx, by, 3, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Вершина антенны (излучатель)
+      ctx.beginPath();
+      ctx.arc(tx, ty, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // Концентрические радиоволны на верхушке
+      ctx.beginPath();
+      ctx.arc(tx, ty, 9, -Math.PI / 2, Math.PI / 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Подпись типа
+      ctx.shadowBlur = 0;
+      ctx.font = '11px Inter';
+      ctx.fillStyle = '#f8fafc';
+      ctx.textAlign = bx < canvas.clientWidth / 2 ? 'right' : 'left';
+      const offset = bx < canvas.clientWidth / 2 ? -10 : 10;
+      ctx.fillText(`${title}: ${heightMeters}м`, tx + offset, ty - 6);
+
+      // Иконка типа (Судно, Самолет, Вышка)
+      let icon = '📡';
+      if (heightMeters >= 500) icon = '✈️';
+      else if (heightMeters <= 25) icon = '🚢';
+      else icon = '🗼';
+
+      ctx.font = '14px sans-serif';
+      ctx.fillText(icon, tx + (bx < canvas.clientWidth / 2 ? -28 : 12), ty + 12);
+
+      ctx.restore();
+    }
+
+    function animate() {
+      drawCanvasScene();
+      animationFrameId = requestAnimationFrame(animate);
+    }
+
+    // Синхронизация слайдера и числового поля ввода
+    function linkInputs(slider, numberInput) {
+      slider.addEventListener('input', () => {
+        numberInput.value = slider.value;
+        updateAll();
+      });
+      numberInput.addEventListener('input', () => {
+        let val = parseFloat(numberInput.value) || 1;
+        if (val < 0.5) val = 0.5;
+        slider.value = Math.min(val, slider.max);
+        updateAll();
+      });
+    }
+
+    linkInputs(inputH1, numH1);
+    linkInputs(inputH2, numH2);
+
+    selectK.addEventListener('change', updateAll);
+    inputFreq.addEventListener('input', updateAll);
+    chkShowOptical.addEventListener('change', updateAll);
+
+    // Смена предустановленных частот
+    window.setFrequency = function(mhz, name) {
+      inputFreq.value = mhz;
+      updateAll();
+    };
+
+    // Применение сценариев
+    window.applyPreset = function(presetKey) {
+      const p = PRESETS[presetKey];
+      if (!p) return;
+
+      inputH1.value = p.h1;
+      numH1.value = p.h1;
+      inputH2.value = p.h2;
+      numH2.value = p.h2;
+      labelH1.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span> ${p.label1}`;
+      labelH2.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> ${p.label2}`;
+      inputFreq.value = p.freq;
+      selectK.value = p.k;
+
+      // Обновление кнопок пресетов в шапке
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        if (btn.dataset.preset === presetKey) {
+          btn.className = 'preset-btn px-2.5 py-1.5 rounded-lg transition bg-navy-800 text-cyan-300 shadow-sm';
+        } else {
+          btn.className = 'preset-btn px-2.5 py-1.5 rounded-lg transition hover:bg-navy-800 text-slate-300 hover:text-white';
+        }
+      });
+
+      updateAll();
+    };
+
+    // Сброс к исходным
+    window.resetToDefaults = function() {
+      applyPreset('ship_coast');
+    };
+
+    // Обработка ресайза окна для четкости Canvas
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+    });
+
+    // Инициализация при старте
+    window.onload = function() {
+      resizeCanvas();
+      initChart();
+      applyPreset('ship_coast');
+      animate();
+    };
+  </script>
+</body>
+</html>
